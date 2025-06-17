@@ -243,3 +243,267 @@ GET    /admin/api/v1/blog/archive                 # Blog archive by date
 # Track blog view (public):
 # POST /api/v1/blog/posts/123/track-view
 # Headers: X-Session-ID, User-Agent, Referer
+
+
+
+
+# Complete Coupons/Discounts Management Endpoints
+
+# ======================= COUPONS CRUD =======================
+GET    /admin/api/v1/coupons                       # List coupons with filters
+POST   /admin/api/v1/coupons                       # Create new coupon
+GET    /admin/api/v1/coupons/<coupon_id>           # Get specific coupon details
+PUT    /admin/api/v1/coupons/<coupon_id>           # Update coupon
+DELETE /admin/api/v1/coupons/<coupon_id>           # Delete/deactivate coupon
+
+# ======================= COUPON VALIDATION =======================
+POST   /admin/api/v1/coupons/validate              # Validate coupon code (admin testing)
+
+# ======================= COUPON CODE GENERATION =======================
+POST   /admin/api/v1/coupons/generate-code         # Generate coupon codes
+
+# ======================= BULK OPERATIONS =======================
+PUT    /admin/api/v1/coupons/bulk-update           # Bulk update coupons
+POST   /admin/api/v1/coupons/bulk-generate         # Bulk generate coupons
+
+# ======================= FLASH SALES =======================
+GET    /admin/api/v1/flash-sales                   # List flash sales
+POST   /admin/api/v1/flash-sales                   # Create flash sale
+GET    /admin/api/v1/flash-sales/<sale_id>         # Get flash sale details
+PUT    /admin/api/v1/flash-sales/<sale_id>         # Update flash sale
+DELETE /admin/api/v1/flash-sales/<sale_id>         # Delete flash sale
+
+# ======================= BULK DISCOUNT RULES =======================
+GET    /admin/api/v1/bulk-discounts                # List bulk discount rules
+POST   /admin/api/v1/bulk-discounts                # Create bulk discount rule
+GET    /admin/api/v1/bulk-discounts/<rule_id>      # Get bulk discount details
+PUT    /admin/api/v1/bulk-discounts/<rule_id>      # Update bulk discount rule
+DELETE /admin/api/v1/bulk-discounts/<rule_id>      # Delete bulk discount rule
+
+# ======================= FIRST-TIME BUYER PROMOTIONS =======================
+GET    /admin/api/v1/first-buyer-promotions        # List first-time buyer promotions
+POST   /admin/api/v1/first-buyer-promotions        # Create first-buyer promotion
+PUT    /admin/api/v1/first-buyer-promotions/<id>   # Update first-buyer promotion
+DELETE /admin/api/v1/first-buyer-promotions/<id>   # Delete first-buyer promotion
+
+# ======================= CUSTOMER GROUPS =======================
+GET    /admin/api/v1/customer-groups               # List customer groups
+POST   /admin/api/v1/customer-groups               # Create customer group
+GET    /admin/api/v1/customer-groups/<group_id>    # Get customer group details
+PUT    /admin/api/v1/customer-groups/<group_id>    # Update customer group
+DELETE /admin/api/v1/customer-groups/<group_id>    # Delete customer group
+
+# Customer Group Management
+POST   /admin/api/v1/customer-groups/<group_id>/add-customers     # Add customers to group
+DELETE /admin/api/v1/customer-groups/<group_id>/remove-customers  # Remove customers from group
+POST   /admin/api/v1/customer-groups/<group_id>/sync-criteria     # Auto-assign based on criteria
+
+# ======================= ANALYTICS & REPORTING =======================
+GET    /admin/api/v1/coupons/analytics/dashboard   # Coupon analytics dashboard
+GET    /admin/api/v1/coupons/<coupon_id>/analytics  # Individual coupon analytics
+GET    /admin/api/v1/coupons/stats                  # Overall coupon statistics
+
+# Discount Analytics
+GET    /admin/api/v1/analytics/discount-performance # Discount performance analysis
+GET    /admin/api/v1/analytics/coupon-roi           # Coupon ROI analysis
+GET    /admin/api/v1/analytics/discount-trends      # Discount usage trends
+
+# ======================= PUBLIC ENDPOINTS (for frontend) =======================
+POST   /api/v1/coupons/apply                       # Apply coupon to cart
+POST   /api/v1/coupons/remove                      # Remove coupon from cart
+GET    /api/v1/coupons/eligible                    # Get eligible coupons for customer
+GET    /api/v1/flash-sales/active                  # Get active flash sales
+GET    /api/v1/bulk-discounts/calculate            # Calculate bulk discounts
+
+# ======================= QUERY PARAMETERS =======================
+
+# Coupons List Parameters:
+# - page: Page number (default: 1)
+# - per_page: Items per page (default: 20)
+# - status: active, inactive, expired, upcoming
+# - type: percentage, fixed_amount, buy_x_get_y, free_shipping
+# - search: Search in code, name, description
+# - sort_by: code, name, type, value, used_count, created_at
+# - sort_order: asc, desc
+
+# Flash Sales Parameters:
+# - status: active, upcoming, expired, inactive
+# - page: Page number
+# - per_page: Items per page
+
+# Analytics Parameters:
+# - days: Number of days for analytics (default: 30)
+# - start_date: Start date (YYYY-MM-DD)
+# - end_date: End date (YYYY-MM-DD)
+
+# ======================= REQUEST BODY EXAMPLES =======================
+
+# Create Coupon:
+POST /admin/api/v1/coupons
+{
+  "name": "Summer Sale 2024",
+  "description": "20% off on all summer items",
+  "type": "percentage",
+  "value": 20,
+  "max_discount_amount": 500,
+  "minimum_amount": 1000,
+  "usage_limit": 100,
+  "usage_limit_per_customer": 1,
+  "valid_from": "2024-06-01T00:00:00Z",
+  "valid_until": "2024-08-31T23:59:59Z",
+  "customer_eligibility": "all",
+  "product_eligibility": "specific_categories",
+  "category_ids": [1, 2, 3],
+  "stackable": false,
+  "auto_apply": false,
+  "is_active": true
+}
+
+# Create Flash Sale:
+POST /admin/api/v1/flash-sales
+{
+  "name": "Flash Friday Sale",
+  "description": "24-hour mega discount",
+  "start_time": "2024-07-15T00:00:00Z",
+  "end_time": "2024-07-15T23:59:59Z",
+  "discount_type": "percentage",
+  "discount_value": 30,
+  "target_type": "specific_products",
+  "product_ids": [10, 11, 12],
+  "usage_limit": 500,
+  "banner_text": "FLASH SALE: 30% OFF!",
+  "banner_color": "#ff4444"
+}
+
+# Bulk Generate Coupons:
+POST /admin/api/v1/coupons/bulk-generate
+{
+  "count": 50,
+  "name_template": "VIP Discount {counter}",
+  "type": "fixed_amount",
+  "value": 100,
+  "minimum_amount": 500,
+  "code_length": 8,
+  "code_prefix": "VIP",
+  "code_type": "readable",
+  "valid_days": 30,
+  "customer_eligibility": "customer_groups",
+  "group_ids": [1]
+}
+
+# Validate Coupon:
+POST /admin/api/v1/coupons/validate
+{
+  "code": "SUMMER20",
+  "customer_id": 123,
+  "cart_items": [
+    {
+      "product_id": 1,
+      "quantity": 2,
+      "price": 500
+    }
+  ]
+}
+
+# Apply Coupon (Public):
+POST /api/v1/coupons/apply
+{
+  "code": "SUMMER20",
+  "customer_id": 123,
+  "cart_items": [...]
+}
+
+# Create Customer Group:
+POST /admin/api/v1/customer-groups
+{
+  "name": "VIP Customers",
+  "description": "High-value customers",
+  "criteria": {
+    "min_total_spent": 50000,
+    "min_order_count": 10
+  }
+}
+
+# Create Bulk Discount Rule:
+POST /admin/api/v1/bulk-discounts
+{
+  "name": "Volume Discount - Electronics",
+  "description": "Bulk discounts for electronics",
+  "rule_type": "quantity_based",
+  "target_type": "specific_categories",
+  "category_ids": [1, 2],
+  "tiers": [
+    {"min_qty": 5, "discount": 5},
+    {"min_qty": 10, "discount": 10},
+    {"min_qty": 20, "discount": 15}
+  ]
+}
+
+# ======================= RESPONSE EXAMPLES =======================
+
+# Coupon List Response:
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "code": "SUMMER20",
+        "name": "Summer Sale 2024",
+        "type": "percentage",
+        "value": 20.0,
+        "used_count": 45,
+        "usage_limit": 100,
+        "computed_status": "active",
+        "usage_percentage": 45.0,
+        "remaining_uses": 55,
+        "expires_in_days": 30
+      }
+    ],
+    "pagination": {
+      "total": 50,
+      "page": 1,
+      "per_page": 20,
+      "pages": 3
+    }
+  }
+}
+
+# Coupon Validation Response:
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "coupon": {
+      "id": 1,
+      "code": "SUMMER20",
+      "name": "Summer Sale 2024",
+      "type": "percentage",
+      "value": 20.0
+    },
+    "discount_info": {
+      "discount_amount": 200.0,
+      "applicable_items": 2,
+      "applicable_total": 1000.0,
+      "discount_percentage": 20.0
+    }
+  }
+}
+
+# Analytics Dashboard Response:
+{
+  "success": true,
+  "data": {
+    "days": 30,
+    "statistics": {
+      "total_coupons": 25,
+      "active_coupons": 18,
+      "total_usage": 340,
+      "total_discount_given": 45000.0,
+      "avg_discount_amount": 132.35
+    },
+    "top_coupons": [...],
+    "usage_trends": [...],
+    "type_breakdown": [...]
+  }
+}

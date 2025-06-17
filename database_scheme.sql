@@ -556,3 +556,293 @@ CREATE INDEX idx_blog_posts_featured ON blog_posts(is_featured);
 CREATE INDEX idx_blog_posts_slug ON blog_posts(slug);
 CREATE INDEX idx_blog_comments_post_approved ON blog_comments(post_id, is_approved);
 CREATE INDEX idx_blog_views_post_date ON blog_post_views(post_id, view_date);
+
+
+-- Enhanced Coupons/Discounts Database Schema
+-- Update your existing coupons table and add new tables
+
+-- Drop existing simple coupons table if exists
+DROP TABLE IF EXISTS coupons;
+
+-- Enhanced coupons table with advanced features
+CREATE TABLE coupons (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    
+    -- Discount Configuration
+    type ENUM('percentage', 'fixed_amount', 'buy_x_get_y', 'free_shipping') NOT NULL,
+    value DECIMAL(10,2) NOT NULL,
+    max_discount_amount DECIMAL(10,2) NULL, -- Max discount for percentage coupons
+    
+    -- Conditions
+    minimum_amount DECIMAL(10,2) DEFAULT 0,
+    maximum_amount DECIMAL(10,2) NULL,
+    minimum_quantity INT DEFAULT 1,
+    
+    -- Usage Limits
+    usage_limit INT NULL, -- Total usage limit
+    usage_limit_per_customer INT DEFAULT 1,
+    used_count INT DEFAULT 0,
+    
+    -- Validity
+    valid_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    valid_until TIMESTAMP NULL,
+    
+    -- Targeting
+    customer_eligibility ENUM('all', 'new_customers', 'existing_customers', 'specific_customers', 'customer_groups') DEFAULT 'all',
+    product_eligibility ENUM('all', 'specific_products', 'specific_categories', 'exclude_products', 'exclude_categories') DEFAULT 'all',
+    
+    -- Advanced Settings
+    stackable BOOLEAN DEFAULT FALSE, -- Can be combined with other coupons
+    auto_apply BOOLEAN DEFAULT FALSE, -- Automatically apply if conditions met
+    requires_shipping_address BOOLEAN DEFAULT FALSE,
+    
+    -- Buy X Get Y Configuration (JSON)
+    buy_x_get_y_config JSON NULL, -- {buy_quantity: 2, get_quantity: 1, get_discount: 100}
+    
+    -- Status and Metadata
+    is_active BOOLEAN DEFAULT TRUE,
+    priority INT DEFAULT 0, -- Higher priority applied first
+    created_by INT, -- Admin who created it
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (created_by) REFERENCES admins(id) ON DELETE SET NULL,
+    INDEX idx_code (code),
+    INDEX idx_active (is_active),
+    INDEX idx_valid_dates (valid_from, valid_until),
+    INDEX idx_type (type)
+);
+
+-- Coupon customer restrictions (for specific customer targeting)
+CREATE TABLE coupon_customers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    coupon_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_coupon_customer (coupon_id, customer_id)
+);
+
+-- Coupon product restrictions
+CREATE TABLE coupon_products (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    coupon_id INT NOT NULL,
+    product_id INT NOT NULL,
+    include_exclude ENUM('include', 'exclude') DEFAULT 'include',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_coupon_product (coupon_id, product_id)
+);
+
+-- Coupon category restrictions
+CREATE TABLE coupon_categories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    coupon_id INT NOT NULL,
+    category_id INT NOT NULL,
+    include_exclude ENUM('include', 'exclude') DEFAULT 'include',
+    include_subcategories BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_coupon_category (coupon_id, category_id)
+);
+
+-- Coupon usage tracking
+CREATE TABLE coupon_usage (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    coupon_id INT NOT NULL,
+    order_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    discount_amount DECIMAL(10,2) NOT NULL,
+    original_order_amount DECIMAL(10,2) NOT NULL,
+    final_order_amount DECIMAL(10,2) NOT NULL,
+    usage_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    INDEX idx_coupon_id (coupon_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_usage_date (usage_date)
+);
+
+-- Customer groups for group-based targeting
+CREATE TABLE customer_groups (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    criteria JSON, -- Conditions for automatic group assignment
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Customer group memberships
+CREATE TABLE customer_group_members (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    group_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    assigned_automatically BOOLEAN DEFAULT FALSE,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES customer_groups(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_group_customer (group_id, customer_id)
+);
+
+-- Coupon group restrictions
+CREATE TABLE coupon_customer_groups (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    coupon_id INT NOT NULL,
+    group_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES customer_groups(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_coupon_group (coupon_id, group_id)
+);
+
+-- Flash sales / Time-based offers
+CREATE TABLE flash_sales (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP NOT NULL,
+    discount_type ENUM('percentage', 'fixed_amount') NOT NULL,
+    discount_value DECIMAL(10,2) NOT NULL,
+    max_discount_amount DECIMAL(10,2) NULL,
+    target_type ENUM('all_products', 'specific_products', 'specific_categories') DEFAULT 'all_products',
+    usage_limit INT NULL,
+    used_count INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    banner_text VARCHAR(500),
+    banner_color VARCHAR(7) DEFAULT '#ff4444',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_active_time (is_active, start_time, end_time)
+);
+
+-- Flash sale product targeting
+CREATE TABLE flash_sale_products (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    flash_sale_id INT NOT NULL,
+    product_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (flash_sale_id) REFERENCES flash_sales(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_sale_product (flash_sale_id, product_id)
+);
+
+-- Flash sale category targeting
+CREATE TABLE flash_sale_categories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    flash_sale_id INT NOT NULL,
+    category_id INT NOT NULL,
+    include_subcategories BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (flash_sale_id) REFERENCES flash_sales(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_sale_category (flash_sale_id, category_id)
+);
+
+-- Discount analytics (daily aggregated data)
+CREATE TABLE discount_analytics (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    date DATE NOT NULL,
+    coupon_id INT,
+    flash_sale_id INT,
+    total_usage INT DEFAULT 0,
+    total_discount_amount DECIMAL(10,2) DEFAULT 0,
+    total_order_amount DECIMAL(10,2) DEFAULT 0,
+    unique_customers INT DEFAULT 0,
+    average_order_value DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coupon_id) REFERENCES coupons(id) ON DELETE CASCADE,
+    FOREIGN KEY (flash_sale_id) REFERENCES flash_sales(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_date_coupon (date, coupon_id),
+    UNIQUE KEY unique_date_flash_sale (date, flash_sale_id),
+    INDEX idx_date (date)
+);
+
+-- Bulk purchase discount rules
+CREATE TABLE bulk_discount_rules (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    rule_type ENUM('quantity_based', 'amount_based') NOT NULL,
+    target_type ENUM('all_products', 'specific_products', 'specific_categories') DEFAULT 'all_products',
+    tiers JSON NOT NULL, -- [{min_qty: 5, discount: 10}, {min_qty: 10, discount: 20}]
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Bulk discount product targeting
+CREATE TABLE bulk_discount_products (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    rule_id INT NOT NULL,
+    product_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (rule_id) REFERENCES bulk_discount_rules(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_rule_product (rule_id, product_id)
+);
+
+-- Bulk discount category targeting
+CREATE TABLE bulk_discount_categories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    rule_id INT NOT NULL,
+    category_id INT NOT NULL,
+    include_subcategories BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (rule_id) REFERENCES bulk_discount_rules(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_rule_category (rule_id, category_id)
+);
+
+-- First-time buyer promotions
+CREATE TABLE first_buyer_promotions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    discount_type ENUM('percentage', 'fixed_amount', 'free_shipping') NOT NULL,
+    discount_value DECIMAL(10,2) NOT NULL,
+    minimum_amount DECIMAL(10,2) DEFAULT 0,
+    max_discount_amount DECIMAL(10,2) NULL,
+    valid_days_after_registration INT DEFAULT 30, -- Valid for X days after registration
+    is_active BOOLEAN DEFAULT TRUE,
+    usage_count INT DEFAULT 0,
+    email_template TEXT, -- Welcome email template
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Insert some default customer groups
+INSERT INTO customer_groups (name, description, criteria) VALUES
+('VIP Customers', 'High-value customers with orders above ₹50,000', '{"min_total_spent": 50000}'),
+('Regular Customers', 'Customers with 3+ orders', '{"min_order_count": 3}'),
+('New Customers', 'Customers registered in last 30 days', '{"registered_within_days": 30}'),
+('Inactive Customers', 'No orders in last 90 days', '{"no_orders_since_days": 90}');
+
+-- Insert some sample bulk discount rules
+INSERT INTO bulk_discount_rules (name, description, rule_type, tiers) VALUES
+('Quantity Discount - Electronics', 'Volume discounts for electronics', 'quantity_based', 
+ '[{"min_qty": 5, "discount": 5}, {"min_qty": 10, "discount": 10}, {"min_qty": 20, "discount": 15}]'),
+('Amount-based Discount', 'Discounts based on order value', 'amount_based',
+ '[{"min_amount": 1000, "discount": 5}, {"min_amount": 5000, "discount": 10}, {"min_amount": 10000, "discount": 15}]');
+
+-- Insert default first-time buyer promotion
+INSERT INTO first_buyer_promotions (name, description, discount_type, discount_value, minimum_amount, valid_days_after_registration) VALUES
+('Welcome Discount', 'Welcome new customers with 10% off first order', 'percentage', 10.00, 500.00, 30);
+
+-- Create indexes for better performance
+CREATE INDEX idx_coupons_validity ON coupons(is_active, valid_from, valid_until);
+CREATE INDEX idx_coupon_usage_date ON coupon_usage(usage_date);
+CREATE INDEX idx_flash_sales_time ON flash_sales(start_time, end_time, is_active);
+CREATE INDEX idx_customer_groups_active ON customer_groups(is_active);
+CREATE INDEX idx_bulk_rules_active ON bulk_discount_rules(is_active);
