@@ -1,0 +1,127 @@
+# Authentication
+POST /admin/api/v1/auth/login
+GET  /admin/api/v1/auth/profile
+POST /admin/api/v1/auth/logout
+GET  /admin/api/v1/health
+
+# Dashboard Analytics
+GET  /admin/api/v1/dashboard/stats
+GET  /admin/api/v1/dashboard/revenue-analytics
+GET  /admin/api/v1/dashboard/low-stock-alerts
+GET  /admin/api/v1/dashboard/top-selling-products
+GET  /admin/api/v1/dashboard/order-status-distribution
+GET  /admin/api/v1/dashboard/payment-method-stats
+GET  /admin/api/v1/dashboard/return-refund-rate
+
+
+# General Config
+GET/PUT /admin/api/v1/config
+
+# Hero Carousel
+GET/PUT /admin/api/v1/config/hero-carousel
+POST   /admin/api/v1/config/hero-carousel/upload
+
+# Top Offer Bar
+GET/PUT /admin/api/v1/config/top-offer-bar
+
+# Product Instructions
+GET/PUT /admin/api/v1/config/product-instructions
+
+# Maintenance Mode
+GET/PUT /admin/api/v1/config/maintenance-mode
+
+# Announcements
+GET/PUT /admin/api/v1/config/announcements
+
+# Footer
+GET/PUT /admin/api/v1/config/footer
+
+# Currency & Timezone
+GET/PUT /admin/api/v1/config/currency-timezone
+
+# Tax Settings
+GET/PUT /admin/api/v1/config/tax-settings
+
+# Policies
+GET/PUT /admin/api/v1/config/policies
+GET/PUT /admin/api/v1/config/policy/<policy_type>
+
+# File Upload
+POST   /admin/api/v1/config/upload
+
+
+# Business Profile
+GET/PUT /admin/api/v1/store/business-profile
+
+# Logo Management
+GET     /admin/api/v1/store/logo
+POST    /admin/api/v1/store/logo/upload
+
+# Contact Information
+GET/PUT /admin/api/v1/store/contact-info
+
+# Addresses
+GET/PUT /admin/api/v1/store/addresses
+
+# Social Media
+GET/PUT /admin/api/v1/store/social-media
+
+# Business Hours
+GET/PUT /admin/api/v1/store/business-hours
+
+# Tax Registration
+GET/PUT /admin/api/v1/store/tax-registration
+
+# Bank Details
+GET/PUT /admin/api/v1/store/bank-details
+
+# Store Description
+GET/PUT /admin/api/v1/store/description
+
+# About Us
+GET/PUT /admin/api/v1/store/about-us
+
+# Store Policies
+GET/PUT /admin/api/v1/store/policies
+GET/PUT /admin/api/v1/store/policy/<policy_type>
+
+# Document Upload
+POST    /admin/api/v1/store/upload-document
+
+
+GET    /admin/api/v1/integrations                    # List all integrations
+POST   /admin/api/v1/integrations                    # Create integration
+GET    /admin/api/v1/integrations/<service_type>     # Get by service type
+PUT    /admin/api/v1/integrations/<id>               # Update integration
+PUT    /admin/api/v1/integrations/<id>/toggle-test-mode    # Toggle test mode
+PUT    /admin/api/v1/integrations/<id>/toggle-active      # Toggle active status
+
+
+
+GET/PUT /admin/api/v1/integrations/payment/razorpay
+GET/PUT /admin/api/v1/integrations/payment/phonepe
+POST    /admin/api/v1/integrations/payment/process
+POST    /admin/api/v1/integrations/payment/refund
+
+GET/PUT /admin/api/v1/integrations/shipping/shiprocket
+GET/PUT /admin/api/v1/integrations/shipping/self-shipping
+POST    /admin/api/v1/integrations/shipping/calculate-rates
+POST    /admin/api/v1/integrations/shipping/track-order
+
+
+
+POST /webhooks/razorpay      # Razorpay webhook handler
+POST /webhooks/phonepe       # PhonePe webhook handler
+POST /webhooks/shiprocket    # Shiprocket webhook handler
+
+
+
+GET /admin/api/v1/integrations/logs                    # API logs
+GET /admin/api/v1/integrations/health-check            # Health monitoring
+GET /admin/api/v1/integrations/analytics/usage         # Usage analytics
+GET /admin/api/v1/integrations/analytics/errors        # Error analytics
+
+
+
+GET  /admin/api/v1/integrations/custom-endpoints       # List custom endpoints
+POST /admin/api/v1/integrations/custom-endpoints       # Create custom endpoint
