@@ -125,3 +125,121 @@ GET /admin/api/v1/integrations/analytics/errors        # Error analytics
 
 GET  /admin/api/v1/integrations/custom-endpoints       # List custom endpoints
 POST /admin/api/v1/integrations/custom-endpoints       # Create custom endpoint
+
+
+
+# Complete Blog Management Endpoints (Updated)
+
+# ======================= BLOG POSTS =======================
+GET    /admin/api/v1/blog/posts                    # List blog posts with filters
+POST   /admin/api/v1/blog/posts                    # Create new blog post
+GET    /admin/api/v1/blog/posts/<post_id>          # Get specific blog post
+PUT    /admin/api/v1/blog/posts/<post_id>          # Update blog post
+DELETE /admin/api/v1/blog/posts/<post_id>          # Delete blog post
+
+# Blog Post Media
+POST   /admin/api/v1/blog/posts/<post_id>/featured-image    # Upload featured image
+
+# Bulk Operations
+PUT    /admin/api/v1/blog/posts/bulk-update        # Bulk update posts
+
+# ======================= BLOG CATEGORIES & TAGS =======================
+GET    /admin/api/v1/blog/categories               # Get all blog categories
+GET    /admin/api/v1/blog/tags                     # Get all blog tags
+
+# ======================= BLOG COMMENTS (Separate Module) =======================
+GET    /admin/api/v1/blog/comments                 # List comments with filters
+POST   /admin/api/v1/blog/comments                 # Create comment/reply (admin)
+GET    /admin/api/v1/blog/comments/<comment_id>    # Get specific comment with replies
+PUT    /admin/api/v1/blog/comments/<comment_id>    # Update comment
+DELETE /admin/api/v1/blog/comments/<comment_id>    # Delete comment and replies
+
+# Comment Moderation Actions
+PUT    /admin/api/v1/blog/comments/<comment_id>/approve     # Approve comment
+PUT    /admin/api/v1/blog/comments/<comment_id>/reject      # Reject comment
+PUT    /admin/api/v1/blog/comments/<comment_id>/spam        # Mark as spam
+
+# Bulk Comment Operations
+PUT    /admin/api/v1/blog/comments/bulk-action     # Bulk comment actions (approve/reject/spam/delete)
+
+# Comment Management Features
+GET    /admin/api/v1/blog/comments/stats           # Comment statistics and trends
+GET    /admin/api/v1/blog/comments/moderation-queue # Pending comments needing moderation
+
+# ======================= BLOG ANALYTICS =======================
+GET    /admin/api/v1/blog/analytics/dashboard      # Blog analytics dashboard
+GET    /admin/api/v1/blog/posts/<post_id>/analytics        # Individual post analytics
+
+# ======================= BLOG TRACKING (Public Endpoints) =======================
+POST   /api/v1/blog/posts/<post_id>/track-view     # Track blog post view
+POST   /api/v1/blog/posts/<post_id>/share/<platform>       # Track social shares
+
+# ======================= BLOG RSS & FEEDS =======================
+GET    /api/v1/blog/rss                           # Generate RSS feed data
+
+# ======================= NEWSLETTER MANAGEMENT =======================
+GET    /admin/api/v1/blog/newsletter/subscribers  # List newsletter subscribers
+GET    /admin/api/v1/blog/newsletter/stats        # Newsletter statistics
+
+# ======================= BLOG SEARCH & ARCHIVE =======================
+GET    /admin/api/v1/blog/search                  # Search blog posts
+GET    /admin/api/v1/blog/archive                 # Blog archive by date
+
+# ======================= QUERY PARAMETERS =======================
+
+# Blog Posts Parameters:
+# - page: Page number (default: 1)
+# - per_page: Items per page (default: 20)
+# - status: draft, published, scheduled
+# - search: Search in title, content, excerpt
+# - author_id: Filter by author
+# - category: Filter by category
+# - tag: Filter by tag
+# - sort_by: title, status, published_at, created_at, views
+# - sort_order: asc, desc
+
+# Blog Comments Parameters:
+# - page: Page number
+# - per_page: Items per page  
+# - post_id: Filter by specific post
+# - status: approved, pending, spam
+# - search: Search in author name, email, content
+# - sort_by: author_name, created_at, post_title
+# - sort_order: asc, desc
+
+# Comment Bulk Actions:
+# - comment_ids: Array of comment IDs
+# - action: approve, reject, spam, delete
+
+# Analytics Parameters:
+# - days: Number of days for analytics (default: 30)
+
+# Search Parameters:
+# - q: Search query
+# - category: Filter by category
+# - tag: Filter by tag
+# - author_id: Filter by author
+# - date_from: Start date (YYYY-MM-DD)
+# - date_to: End date (YYYY-MM-DD)
+
+# ======================= EXAMPLE REQUESTS =======================
+
+# Get pending comments for moderation:
+# GET /admin/api/v1/blog/comments?status=pending&sort_by=created_at&sort_order=asc
+
+# Bulk approve multiple comments:
+# PUT /admin/api/v1/blog/comments/bulk-action
+# Body: {"comment_ids": [1, 2, 3], "action": "approve"}
+
+# Get comment statistics:
+# GET /admin/api/v1/blog/comments/stats
+
+# Get moderation queue:
+# GET /admin/api/v1/blog/comments/moderation-queue?limit=20
+
+# Search blog posts:
+# GET /admin/api/v1/blog/search?q=technology&category=Tech&date_from=2024-01-01
+
+# Track blog view (public):
+# POST /api/v1/blog/posts/123/track-view
+# Headers: X-Session-ID, User-Agent, Referer

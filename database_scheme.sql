@@ -386,3 +386,173 @@ CREATE INDEX idx_customer_newsletter_customer ON customer_newsletter_subscriptio
 CREATE INDEX idx_customer_communications_customer ON customer_communications(customer_id);
 CREATE INDEX idx_customers_email ON customers(email);
 CREATE INDEX idx_customers_created_at ON customers(created_at);
+
+
+
+
+-- Additional tables for Blog Section (add to your existing database_scheme.sql)
+
+-- Blog posts table (already exists in your schema, but with additional fields)
+ALTER TABLE blog_posts 
+ADD COLUMN categories JSON AFTER tags,
+ADD COLUMN tags JSON AFTER categories,
+ADD COLUMN meta_data JSON AFTER tags,
+ADD COLUMN views INT DEFAULT 0 AFTER meta_data,
+ADD COLUMN allow_comments BOOLEAN DEFAULT TRUE AFTER views,
+ADD COLUMN is_featured BOOLEAN DEFAULT FALSE AFTER allow_comments;
+
+-- Blog comments table
+CREATE TABLE blog_comments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    post_id INT NOT NULL,
+    parent_id INT NULL,
+    author_name VARCHAR(255) NOT NULL,
+    author_email VARCHAR(255) NOT NULL,
+    author_website VARCHAR(255),
+    content TEXT NOT NULL,
+    is_approved BOOLEAN DEFAULT FALSE,
+    is_spam BOOLEAN DEFAULT FALSE,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES blog_comments(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id),
+    INDEX idx_parent_id (parent_id),
+    INDEX idx_approved (is_approved),
+    INDEX idx_created_at (created_at)
+);
+
+-- Blog post views tracking
+CREATE TABLE blog_post_views (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    post_id INT NOT NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    referrer VARCHAR(500),
+    view_date DATE NOT NULL,
+    view_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    session_id VARCHAR(100),
+    FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id),
+    INDEX idx_view_date (view_date),
+    INDEX idx_session_id (session_id),
+    UNIQUE KEY unique_view (post_id, ip_address, view_date, session_id)
+);
+
+-- Blog categories (separate table for better management)
+CREATE TABLE blog_categories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    color VARCHAR(7) DEFAULT '#007bff',
+    is_active BOOLEAN DEFAULT TRUE,
+    post_count INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_slug (slug),
+    INDEX idx_active (is_active)
+);
+
+-- Blog tags (separate table for better management)
+CREATE TABLE blog_tags (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    color VARCHAR(7) DEFAULT '#6c757d',
+    post_count INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_slug (slug)
+);
+
+-- Blog post-category relationships
+CREATE TABLE blog_post_categories (
+    post_id INT NOT NULL,
+    category_id INT NOT NULL,
+    PRIMARY KEY (post_id, category_id),
+    FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES blog_categories(id) ON DELETE CASCADE
+);
+
+-- Blog post-tag relationships
+CREATE TABLE blog_post_tags (
+    post_id INT NOT NULL,
+    tag_id INT NOT NULL,
+    PRIMARY KEY (post_id, tag_id),
+    FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES blog_tags(id) ON DELETE CASCADE
+);
+
+-- Blog social shares tracking
+CREATE TABLE blog_social_shares (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    post_id INT NOT NULL,
+    platform ENUM('facebook', 'twitter', 'linkedin', 'pinterest', 'whatsapp', 'telegram', 'email') NOT NULL,
+    share_count INT DEFAULT 0,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_post_platform (post_id, platform),
+    INDEX idx_post_id (post_id)
+);
+
+-- Blog newsletter subscribers
+CREATE TABLE blog_newsletter_subscribers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    name VARCHAR(255),
+    is_subscribed BOOLEAN DEFAULT TRUE,
+    subscription_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    unsubscription_date TIMESTAMP NULL,
+    verification_token VARCHAR(255),
+    is_verified BOOLEAN DEFAULT FALSE,
+    preferences JSON,
+    INDEX idx_email (email),
+    INDEX idx_subscribed (is_subscribed)
+);
+
+-- Blog analytics summary (daily aggregation)
+CREATE TABLE blog_analytics_daily (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    post_id INT NOT NULL,
+    analytics_date DATE NOT NULL,
+    unique_views INT DEFAULT 0,
+    total_views INT DEFAULT 0,
+    total_comments INT DEFAULT 0,
+    total_shares INT DEFAULT 0,
+    bounce_rate DECIMAL(5,2) DEFAULT 0,
+    avg_time_on_page INT DEFAULT 0,
+    FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_post_date (post_id, analytics_date),
+    INDEX idx_date (analytics_date)
+);
+
+-- Insert some default blog categories
+INSERT INTO blog_categories (name, slug, description, color) VALUES
+('Technology', 'technology', 'Posts about technology and innovation', '#007bff'),
+('Business', 'business', 'Business insights and strategies', '#28a745'),
+('Lifestyle', 'lifestyle', 'Lifestyle and personal development', '#ffc107'),
+('News', 'news', 'Latest news and updates', '#dc3545'),
+('Tutorials', 'tutorials', 'How-to guides and tutorials', '#6f42c1');
+
+-- Insert some default blog tags
+INSERT INTO blog_tags (name, slug, color) VALUES
+('AI', 'ai', '#007bff'),
+('Machine Learning', 'machine-learning', '#007bff'),
+('E-commerce', 'ecommerce', '#28a745'),
+('Marketing', 'marketing', '#fd7e14'),
+('SEO', 'seo', '#20c997'),
+('Web Development', 'web-development', '#6f42c1'),
+('Mobile', 'mobile', '#e83e8c'),
+('Security', 'security', '#dc3545'),
+('Analytics', 'analytics', '#17a2b8'),
+('Social Media', 'social-media', '#6c757d');
+
+-- Create indexes for better performance
+CREATE INDEX idx_blog_posts_status_published ON blog_posts(status, published_at);
+CREATE INDEX idx_blog_posts_author ON blog_posts(author_id);
+CREATE INDEX idx_blog_posts_featured ON blog_posts(is_featured);
+CREATE INDEX idx_blog_posts_slug ON blog_posts(slug);
+CREATE INDEX idx_blog_comments_post_approved ON blog_comments(post_id, is_approved);
+CREATE INDEX idx_blog_views_post_date ON blog_post_views(post_id, view_date);
