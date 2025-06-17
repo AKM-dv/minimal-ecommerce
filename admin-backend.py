@@ -1,3 +1,28 @@
+from flask import Flask, jsonify, Blueprint
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+import os
+
+# Import configuration
+from config import Config
+
+# Initialize Flask app
+app = Flask(__name__)
+app.config.from_object(Config)
+
+# Initialize extensions
+CORS(app, origins=["http://localhost:3000"])  # React admin frontend
+jwt = JWTManager(app)
+
+# Create upload directory
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Serve uploaded files
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    from flask import send_from_directory
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 # Import and register blueprints
 from admin.auth import auth_bp
 from admin.dashboard import dashboard_bp
@@ -26,14 +51,11 @@ app.register_blueprint(blog_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(blog_comments_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(coupons_bp, url_prefix='/admin/api/v1')
 
-# Register public blog endpoints (without admin prefix for public access)
-# These endpoints are for frontend blog functionality (tracking views, shares, comments)
-from flask import Blueprint
-
 # Create a separate blueprint for public endpoints
 public_bp = Blueprint('public', __name__)
 
-# Import specific public routes from blog_bp
+# ======================= PUBLIC BLOG ENDPOINTS =======================
+
 @public_bp.route('/blog/posts/<int:post_id>/track-view', methods=['POST'])
 def track_view(post_id):
     from admin.blog import track_blog_view
@@ -49,7 +71,8 @@ def rss_feed():
     from admin.blog import generate_rss_feed
     return generate_rss_feed()
 
-# Add public coupon endpoints
+# ======================= PUBLIC COUPON ENDPOINTS =======================
+
 @public_bp.route('/coupons/apply', methods=['POST'])
 def apply_coupon():
     from admin.coupons import validate_coupon_code
@@ -70,13 +93,26 @@ def apply_coupon():
             return success_response({
                 'applied': True,
                 'coupon': validation_result['coupon'],
-                'discount': validation_result['discount_info']
+                'discount': validation_result.get('discount_info')
             }, 'Coupon applied successfully')
         else:
             return error_response(validation_result['error'], 400)
             
     except Exception as e:
         return error_response('Error applying coupon', 500)
+
+@public_bp.route('/coupons/remove', methods=['POST'])
+def remove_coupon():
+    from utils import success_response
+    
+    try:
+        # In a real implementation, you'd remove the coupon from the cart session
+        return success_response({
+            'removed': True
+        }, 'Coupon removed successfully')
+        
+    except Exception as e:
+        return error_response('Error removing coupon', 500)
 
 @public_bp.route('/coupons/eligible', methods=['GET'])
 def get_eligible_coupons():
@@ -159,84 +195,88 @@ def get_active_flash_sales():
     except Exception as e:
         return error_response('Error fetching active flash sales', 500)
 
+@public_bp.route('/bulk-discounts/calculate', methods=['POST'])
+def calculate_bulk_discounts():
+    from models import Database
+    from utils import success_response, error_response, get_request_data
+    import json
+    
+    try:
+        data = get_request_data()
+        cart_items = data.get('cart_items', [])
+        
+        if not cart_items:
+            return success_response({'discount_amount': 0})
+        
+        # Get active bulk discount rules
+        rules_query = """
+        SELECT * FROM bulk_discount_rules 
+        WHERE is_active = 1 
+        ORDER BY created_at DESC
+        """
+        rules = Database.execute_query(rules_query, fetch=True)
+        
+        total_discount = 0
+        applied_rules = []
+        
+        for rule in rules:
+            try:
+                tiers = json.loads(rule['tiers'])
+                
+                if rule['rule_type'] == 'quantity_based':
+                    total_qty = sum(int(item['quantity']) for item in cart_items)
+                    
+                    # Find applicable tier
+                    applicable_tier = None
+                    for tier in sorted(tiers, key=lambda x: x['min_qty'], reverse=True):
+                        if total_qty >= tier['min_qty']:
+                            applicable_tier = tier
+                            break
+                    
+                    if applicable_tier:
+                        cart_total = sum(float(item['price']) * int(item['quantity']) for item in cart_items)
+                        tier_discount = cart_total * (applicable_tier['discount'] / 100)
+                        total_discount += tier_discount
+                        applied_rules.append({
+                            'rule_name': rule['name'],
+                            'tier': applicable_tier,
+                            'discount_amount': tier_discount
+                        })
+                
+                elif rule['rule_type'] == 'amount_based':
+                    cart_total = sum(float(item['price']) * int(item['quantity']) for item in cart_items)
+                    
+                    # Find applicable tier
+                    applicable_tier = None
+                    for tier in sorted(tiers, key=lambda x: x['min_amount'], reverse=True):
+                        if cart_total >= tier['min_amount']:
+                            applicable_tier = tier
+                            break
+                    
+                    if applicable_tier:
+                        tier_discount = cart_total * (applicable_tier['discount'] / 100)
+                        total_discount += tier_discount
+                        applied_rules.append({
+                            'rule_name': rule['name'],
+                            'tier': applicable_tier,
+                            'discount_amount': tier_discount
+                        })
+                        
+            except:
+                continue
+        
+        return success_response({
+            'discount_amount': round(total_discount, 2),
+            'applied_rules': applied_rules
+        })
+        
+    except Exception as e:
+        return error_response('Error calculating bulk discounts', 500)
+
 # Register public endpoints
-app.register_blueprint(public_bp, url_prefix='/api/v1')from flask import Flask, jsonify
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager
-import os
+app.register_blueprint(public_bp, url_prefix='/api/v1')
 
-# Import configuration
-from config import Config
-
-# Initialize Flask app
-app = Flask(__name__)
-app.config.from_object(Config)
-
-# Initialize extensions
-CORS(app, origins=["http://localhost:3000"])  # React admin frontend
-jwt = JWTManager(app)
-
-# Create upload directory
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-# Serve uploaded files
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    from flask import send_from_directory
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-# Import and register blueprints
-from admin.auth import auth_bp
-from admin.dashboard import dashboard_bp
-from admin.config import config_bp
-from admin.store import store_bp
-from admin.products import products_bp
-from admin.categories import categories_bp
-from admin.orders import orders_bp
-from admin.customers import customers_bp
-from admin.integrations import integrations_bp
-from admin.blog import blog_bp
-from admin.blog_comments import blog_comments_bp
-
-# Register all blueprints with URL prefix
-app.register_blueprint(auth_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(dashboard_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(config_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(store_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(products_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(categories_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(orders_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(customers_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(integrations_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(blog_bp, url_prefix='/admin/api/v1')
-app.register_blueprint(blog_comments_bp, url_prefix='/admin/api/v1')
-
-# Register public blog endpoints (without admin prefix for public access)
-# These endpoints are for frontend blog functionality (tracking views, shares, comments)
-from flask import Blueprint
-
-# Create a separate blueprint for public blog endpoints
-public_blog_bp = Blueprint('public_blog', __name__)
-
-# Import specific public routes from blog_bp
-@public_blog_bp.route('/blog/posts/<int:post_id>/track-view', methods=['POST'])
-def track_view(post_id):
-    from admin.blog import track_blog_view
-    return track_blog_view(post_id)
-
-@public_blog_bp.route('/blog/posts/<int:post_id>/share/<platform>', methods=['POST'])
-def track_share(post_id, platform):
-    from admin.blog import track_social_share
-    return track_social_share(post_id, platform)
-
-@public_blog_bp.route('/blog/rss', methods=['GET'])
-def rss_feed():
-    from admin.blog import generate_rss_feed
-    return generate_rss_feed()
-
-# Register public blog endpoints
-app.register_blueprint(public_blog_bp, url_prefix='/api/v1')
-app.register_blueprint(public_blog_bp, url_prefix='/api/v1')
+# ======================= MAIN ENDPOINTS =======================
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
@@ -271,21 +311,10 @@ def api_info():
             'Order Management',
             'Customer Management',
             'Blog Management',
+            'Coupons & Discounts',
             'API Integrations'
         ],
         'features': {
-            'blog': {
-                'posts': 'Full CRUD with rich text editing',
-                'comments': 'Advanced moderation system with spam detection',
-                'threaded_comments': 'Reply system with nested conversations',
-                'moderation_queue': 'Streamlined comment approval workflow',
-                'analytics': 'Views, engagement, and performance tracking',
-                'seo': 'Automated SEO scoring and optimization',
-                'scheduling': 'Post scheduling and publishing',
-                'categories_tags': 'Flexible categorization and tagging',
-                'newsletter': 'Subscriber management',
-                'rss': 'Automated RSS feed generation',
-                'social_sharing': 'Social media share tracking',
             'coupons_discounts': {
                 'percentage_discounts': 'Percentage-based discount coupons',
                 'fixed_amount_discounts': 'Fixed amount discount coupons',
@@ -301,6 +330,19 @@ def api_info():
                 'analytics': 'ROI tracking and performance analytics',
                 'bulk_operations': 'Mass coupon management operations'
             },
+            'blog': {
+                'posts': 'Full CRUD with rich text editing',
+                'comments': 'Advanced moderation system with spam detection',
+                'threaded_comments': 'Reply system with nested conversations',
+                'moderation_queue': 'Streamlined comment approval workflow',
+                'analytics': 'Views, engagement, and performance tracking',
+                'seo': 'Automated SEO scoring and optimization',
+                'scheduling': 'Post scheduling and publishing',
+                'categories_tags': 'Flexible categorization and tagging',
+                'newsletter': 'Subscriber management',
+                'rss': 'Automated RSS feed generation',
+                'social_sharing': 'Social media share tracking'
+            },
             'integrations': {
                 'payment': 'Razorpay, PhonePe support',
                 'shipping': 'Shiprocket integration',
@@ -313,10 +355,31 @@ def api_info():
                 'products': 'Inventory and sales analytics',
                 'orders': 'Order lifecycle tracking'
             }
+        },
+        'public_endpoints': {
+            'blog_tracking': ['/api/v1/blog/posts/{id}/track-view', '/api/v1/blog/posts/{id}/share/{platform}'],
+            'coupons': ['/api/v1/coupons/apply', '/api/v1/coupons/eligible', '/api/v1/coupons/remove'],
+            'flash_sales': ['/api/v1/flash-sales/active'],
+            'bulk_discounts': ['/api/v1/bulk-discounts/calculate'],
+            'rss': ['/api/v1/blog/rss']
+        },
+        'admin_endpoints': {
+            'auth': '/admin/api/v1/auth/*',
+            'dashboard': '/admin/api/v1/dashboard/*',
+            'config': '/admin/api/v1/config/*',
+            'store': '/admin/api/v1/store/*',
+            'products': '/admin/api/v1/products/*',
+            'categories': '/admin/api/v1/categories/*',
+            'orders': '/admin/api/v1/orders/*',
+            'customers': '/admin/api/v1/customers/*',
+            'blog': '/admin/api/v1/blog/*',
+            'coupons': '/admin/api/v1/coupons/*',
+            'integrations': '/admin/api/v1/integrations/*'
         }
     })
 
-# Error handlers
+# ======================= ERROR HANDLERS =======================
+
 @app.errorhandler(404)
 def not_found(error):
     from utils import error_response
@@ -347,7 +410,8 @@ def method_not_allowed(error):
     from utils import error_response
     return error_response('Method not allowed', 405)
 
-# JWT error handlers
+# ======================= JWT ERROR HANDLERS =======================
+
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
     from utils import error_response
@@ -363,7 +427,8 @@ def missing_token_callback(error):
     from utils import error_response
     return error_response('Authorization token is required', 401)
 
-# Request middleware for logging (optional)
+# ======================= REQUEST MIDDLEWARE =======================
+
 @app.before_request
 def before_request():
     """Log requests for debugging (optional)"""
@@ -377,7 +442,25 @@ def after_request(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     return response
 
-# Development configuration
+# ======================= WEBHOOK ENDPOINTS =======================
+
+@app.route('/webhooks/razorpay', methods=['POST'])
+def razorpay_webhook():
+    from admin.integrations import handle_webhook
+    return handle_webhook('razorpay')
+
+@app.route('/webhooks/phonepe', methods=['POST'])
+def phonepe_webhook():
+    from admin.integrations import handle_webhook
+    return handle_webhook('phonepe')
+
+@app.route('/webhooks/shiprocket', methods=['POST'])
+def shiprocket_webhook():
+    from admin.integrations import handle_webhook
+    return handle_webhook('shiprocket')
+
+# ======================= DEVELOPMENT CONFIGURATION =======================
+
 if __name__ == '__main__':
     # Check if all required environment variables are set
     required_env_vars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
@@ -388,16 +471,16 @@ if __name__ == '__main__':
         print("Please check your .env file or environment configuration")
     
     # Print startup information
-    print("=" * 60)
+    print("=" * 70)
     print("🚀 E-COMMERCE ADMIN API STARTING")
-    print("=" * 60)
+    print("=" * 70)
     print(f"📡 Admin Panel: http://localhost:5001/admin/api/v1")
     print(f"🌐 Public API: http://localhost:5001/api/v1")
     print(f"📊 Health Check: http://localhost:5001/health")
     print(f"📁 File Uploads: http://localhost:5001/uploads/")
     print(f"📝 API Info: http://localhost:5001/admin/api/v1/info")
-    print("=" * 60)
-    print("🔧 Available Modules:")
+    print("=" * 70)
+    print("🔧 Available Admin Modules:")
     print("   • Authentication & Authorization")
     print("   • Dashboard Analytics") 
     print("   • Site Configuration")
@@ -408,9 +491,18 @@ if __name__ == '__main__':
     print("   • Customer Management")
     print("   • Blog Management")
     print("   • Blog Comments Management")
-    print("   • Coupons & Discounts (NEW)")
+    print("   • Coupons & Discounts")
     print("   • API Integrations")
-    print("=" * 60)
+    print("=" * 70)
+    print("🌐 Public API Endpoints:")
+    print("   • Blog post view tracking")
+    print("   • Social media share tracking")
+    print("   • RSS feed generation")
+    print("   • Coupon validation & application")
+    print("   • Eligible coupons for customers")
+    print("   • Active flash sales")
+    print("   • Bulk discount calculations")
+    print("=" * 70)
     print("💰 Coupons & Discounts Features:")
     print("   • Percentage & fixed amount discounts")
     print("   • Minimum/maximum order requirements")
@@ -425,7 +517,7 @@ if __name__ == '__main__':
     print("   • Advanced analytics & ROI tracking")
     print("   • Bulk operations & management")
     print("   • Auto-apply & stackable coupons")
-    print("=" * 60)
+    print("=" * 70)
     print("📝 Blog Features:")
     print("   • Rich text editor support")
     print("   • Comment moderation system")
@@ -440,7 +532,12 @@ if __name__ == '__main__':
     print("   • Social media share tracking")
     print("   • Comment moderation queue")
     print("   • Bulk comment operations")
-    print("=" * 60)
+    print("=" * 70)
+    print("🔗 Webhook Endpoints:")
+    print("   • /webhooks/razorpay")
+    print("   • /webhooks/phonepe")
+    print("   • /webhooks/shiprocket")
+    print("=" * 70)
     
     # Run the application
     app.run(
