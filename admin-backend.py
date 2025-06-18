@@ -3,7 +3,6 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
 
-
 # Import configuration
 from config import Config
 
@@ -39,7 +38,7 @@ from admin.blog_comments import blog_comments_bp
 from admin.coupons import coupons_bp
 from admin.product_reviews import product_reviews_bp
 from admin.inventory import inventory_bp
-
+from admin.seo import seo_bp  # Import SEO blueprint
 
 # Register all blueprints with URL prefix
 app.register_blueprint(auth_bp, url_prefix='/admin/api/v1')
@@ -56,8 +55,7 @@ app.register_blueprint(blog_comments_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(coupons_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(product_reviews_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(inventory_bp, url_prefix='/admin/api/v1')
-
-
+app.register_blueprint(seo_bp, url_prefix='/admin/api/v1')  # Register SEO blueprint
 
 # Create a separate blueprint for public endpoints
 public_bp = Blueprint('public', __name__)
@@ -84,7 +82,8 @@ def rss_feed():
 @public_bp.route('/coupons/apply', methods=['POST'])
 def apply_coupon():
     from admin.coupons import validate_coupon_code
-    from utils import success_response, error_response, get_request_data
+    from utils.response_formatter import success_response, error_response
+    from utils.helpers import get_request_data
     
     try:
         data = get_request_data()
@@ -111,7 +110,7 @@ def apply_coupon():
 
 @public_bp.route('/coupons/remove', methods=['POST'])
 def remove_coupon():
-    from utils import success_response
+    from utils.response_formatter import success_response, error_response
     
     try:
         # In a real implementation, you'd remove the coupon from the cart session
@@ -125,7 +124,7 @@ def remove_coupon():
 @public_bp.route('/coupons/eligible', methods=['GET'])
 def get_eligible_coupons():
     from admin.coupons import get_applicable_coupons_for_customer
-    from utils import success_response, error_response
+    from utils.response_formatter import success_response, error_response
     from flask import request
     
     try:
@@ -158,8 +157,8 @@ def get_eligible_coupons():
 
 @public_bp.route('/flash-sales/active', methods=['GET'])
 def get_active_flash_sales():
-    from models import Database
-    from utils import success_response, error_response
+    from utils.database import Database
+    from utils.response_formatter import success_response, error_response
     from datetime import datetime
     
     try:
@@ -203,89 +202,11 @@ def get_active_flash_sales():
     except Exception as e:
         return error_response('Error fetching active flash sales', 500)
 
-
-@app.route('/admin/api/v1/info', methods=['GET'])
-def api_info():
-    from utils import success_response
-    return success_response({
-        'name': 'E-commerce Admin API',
-        'version': '1.0.0',
-        'description': 'Comprehensive e-commerce administration backend',
-        'modules': [
-            'Authentication & Authorization',
-            'Dashboard Analytics',
-            'Site Configuration',
-            'Store Management',
-            'Product Management',
-            'Category Management', 
-            'Order Management',
-            'Customer Management',
-            'Blog Management',
-            'Coupons & Discounts',
-            'Product Reviews',
-            'Inventory Management',  # New module
-            'API Integrations'
-        ],
-        'features': {
-            'inventory_management': {
-                'real_time_tracking': 'Live stock level monitoring across all products',
-                'movement_history': 'Complete audit trail of all stock movements',
-                'low_stock_alerts': 'Automated alerts for products below threshold',
-                'bulk_operations': 'Mass inventory updates and adjustments',
-                'import_export': 'CSV import/export for inventory data',
-                'supplier_management': 'Complete supplier database and relationships',
-                'purchase_orders': 'Full PO lifecycle from creation to receiving',
-                'stock_adjustments': 'Manual adjustments with approval workflow',
-                'valuation_reports': 'Inventory valuation and margin analysis',
-                'dead_stock_analysis': 'Identification of slow-moving inventory',
-                'abc_analysis': 'Automated ABC classification for inventory optimization',
-                'forecasting': 'Demand forecasting based on sales history',
-                'cycle_counting': 'Systematic inventory counting and variance tracking',
-                'multi_location': 'Support for multiple warehouses and locations',
-                'transfer_management': 'Inter-location stock transfers',
-                'cost_tracking': 'FIFO/LIFO/Average cost methods',
-                'reorder_automation': 'Intelligent reorder point calculations'
-            },
-            # ... other existing features
-        },
-        'inventory_endpoints': {
-            'stock_management': [
-                '/admin/api/v1/inventory/stock-levels',
-                '/admin/api/v1/inventory/movements',
-                '/admin/api/v1/inventory/adjust'
-            ],
-            'supplier_management': [
-                '/admin/api/v1/inventory/suppliers',
-                '/admin/api/v1/inventory/suppliers/{id}'
-            ],
-            'purchase_orders': [
-                '/admin/api/v1/inventory/purchase-orders',
-                '/admin/api/v1/inventory/purchase-orders/{id}/receive'
-            ],
-            'analytics_reports': [
-                '/admin/api/v1/inventory/analytics/overview',
-                '/admin/api/v1/inventory/reports/valuation',
-                '/admin/api/v1/inventory/reports/dead-stock'
-            ],
-            'bulk_operations': [
-                '/admin/api/v1/inventory/bulk-update',
-                '/admin/api/v1/inventory/import',
-                '/admin/api/v1/inventory/export'
-            ],
-            'forecasting': [
-                '/admin/api/v1/inventory/forecasting'
-            ],
-            'alerts': [
-                '/admin/api/v1/inventory/alerts/low-stock'
-            ]
-        }
-        # ... rest of existing features
-    })
-
 @public_bp.route('/bulk-discounts/calculate', methods=['POST'])
 def calculate_bulk_discounts():
-    from models import Database
-    from utils import success_response, error_response, get_request_data
+    from utils.database import Database
+    from utils.response_formatter import success_response, error_response
+    from utils.helpers import get_request_data
     import json
     
     try:
@@ -360,6 +281,20 @@ def calculate_bulk_discounts():
     except Exception as e:
         return error_response('Error calculating bulk discounts', 500)
 
+# ======================= PUBLIC SEO ENDPOINTS =======================
+
+@public_bp.route('/robots.txt', methods=['GET'])
+def serve_robots_txt():
+    """Serve robots.txt file for SEO"""
+    from admin.seo import serve_robots_txt
+    return serve_robots_txt()
+
+@public_bp.route('/sitemap.xml', methods=['GET'])
+def serve_sitemap():
+    """Serve sitemap.xml file for SEO"""
+    from admin.seo import serve_sitemap
+    return serve_sitemap()
+
 # Register public endpoints
 app.register_blueprint(public_bp, url_prefix='/api/v1')
 
@@ -368,7 +303,7 @@ app.register_blueprint(public_bp, url_prefix='/api/v1')
 # Health check endpoint
 @app.route('/health', methods=['GET'])
 def health_check():
-    from utils import success_response
+    from utils.response_formatter import success_response
     return success_response({
         'status': 'healthy',
         'service': 'E-commerce Admin API',
@@ -383,7 +318,7 @@ def health_check():
 # API information endpoint
 @app.route('/admin/api/v1/info', methods=['GET'])
 def api_info():
-    from utils import success_response
+    from utils.response_formatter import success_response
     return success_response({
         'name': 'E-commerce Admin API',
         'version': '1.0.0',
@@ -399,9 +334,47 @@ def api_info():
             'Customer Management',
             'Blog Management',
             'Coupons & Discounts',
+            'Product Reviews',
+            'Inventory Management',
+            'SEO Management',  # Added SEO module
             'API Integrations'
         ],
         'features': {
+            'seo_management': {
+                'meta_tags': 'Complete meta tags management (title, description, keywords)',
+                'open_graph': 'Open Graph and Twitter Card meta tags',
+                'structured_data': 'Schema.org structured data support',
+                'robots_txt': 'Dynamic robots.txt generation and management',
+                'sitemap_xml': 'Automated XML sitemap generation',
+                'keyword_tracking': 'SEO keyword monitoring and ranking',
+                'page_audits': 'Automated SEO page auditing and scoring',
+                'recommendations': 'AI-powered SEO optimization suggestions',
+                'canonical_urls': 'Canonical URL management for duplicate content',
+                'robots_directives': 'Page-level robots directive control',
+                'content_analysis': 'SEO content analysis and optimization',
+                'competitor_tracking': 'Competitor SEO monitoring',
+                'backlink_analysis': 'Backlink tracking and analysis',
+                'technical_seo': 'Technical SEO audit and recommendations'
+            },
+            'inventory_management': {
+                'real_time_tracking': 'Live stock level monitoring across all products',
+                'movement_history': 'Complete audit trail of all stock movements',
+                'low_stock_alerts': 'Automated alerts for products below threshold',
+                'bulk_operations': 'Mass inventory updates and adjustments',
+                'import_export': 'CSV import/export for inventory data',
+                'supplier_management': 'Complete supplier database and relationships',
+                'purchase_orders': 'Full PO lifecycle from creation to receiving',
+                'stock_adjustments': 'Manual adjustments with approval workflow',
+                'valuation_reports': 'Inventory valuation and margin analysis',
+                'dead_stock_analysis': 'Identification of slow-moving inventory',
+                'abc_analysis': 'Automated ABC classification for inventory optimization',
+                'forecasting': 'Demand forecasting based on sales history',
+                'cycle_counting': 'Systematic inventory counting and variance tracking',
+                'multi_location': 'Support for multiple warehouses and locations',
+                'transfer_management': 'Inter-location stock transfers',
+                'cost_tracking': 'FIFO/LIFO/Average cost methods',
+                'reorder_automation': 'Intelligent reorder point calculations'
+            },
             'coupons_discounts': {
                 'percentage_discounts': 'Percentage-based discount coupons',
                 'fixed_amount_discounts': 'Fixed amount discount coupons',
@@ -440,15 +413,59 @@ def api_info():
                 'dashboard': 'Real-time business metrics',
                 'customers': 'Segmentation and lifetime value',
                 'products': 'Inventory and sales analytics',
-                'orders': 'Order lifecycle tracking'
+                'orders': 'Order lifecycle tracking',
+                'seo': 'SEO performance tracking and analytics'
             }
+        },
+        'seo_endpoints': {
+            'dashboard': '/admin/api/v1/seo/dashboard',
+            'pages': '/admin/api/v1/seo/pages',
+            'keywords': '/admin/api/v1/seo/keywords',
+            'sitemap': '/admin/api/v1/seo/sitemap/generate',
+            'robots': '/admin/api/v1/seo/robots',
+            'audit': '/admin/api/v1/seo/audit/run',
+            'schema': '/admin/api/v1/seo/schema/templates',
+            'public_robots': '/api/v1/robots.txt',
+            'public_sitemap': '/api/v1/sitemap.xml'
+        },
+        'inventory_endpoints': {
+            'stock_management': [
+                '/admin/api/v1/inventory/stock-levels',
+                '/admin/api/v1/inventory/movements',
+                '/admin/api/v1/inventory/adjust'
+            ],
+            'supplier_management': [
+                '/admin/api/v1/inventory/suppliers',
+                '/admin/api/v1/inventory/suppliers/{id}'
+            ],
+            'purchase_orders': [
+                '/admin/api/v1/inventory/purchase-orders',
+                '/admin/api/v1/inventory/purchase-orders/{id}/receive'
+            ],
+            'analytics_reports': [
+                '/admin/api/v1/inventory/analytics/overview',
+                '/admin/api/v1/inventory/reports/valuation',
+                '/admin/api/v1/inventory/reports/dead-stock'
+            ],
+            'bulk_operations': [
+                '/admin/api/v1/inventory/bulk-update',
+                '/admin/api/v1/inventory/import',
+                '/admin/api/v1/inventory/export'
+            ],
+            'forecasting': [
+                '/admin/api/v1/inventory/forecasting'
+            ],
+            'alerts': [
+                '/admin/api/v1/inventory/alerts/low-stock'
+            ]
         },
         'public_endpoints': {
             'blog_tracking': ['/api/v1/blog/posts/{id}/track-view', '/api/v1/blog/posts/{id}/share/{platform}'],
             'coupons': ['/api/v1/coupons/apply', '/api/v1/coupons/eligible', '/api/v1/coupons/remove'],
             'flash_sales': ['/api/v1/flash-sales/active'],
             'bulk_discounts': ['/api/v1/bulk-discounts/calculate'],
-            'rss': ['/api/v1/blog/rss']
+            'rss': ['/api/v1/blog/rss'],
+            'seo': ['/api/v1/robots.txt', '/api/v1/sitemap.xml']
         },
         'admin_endpoints': {
             'auth': '/admin/api/v1/auth/*',
@@ -461,7 +478,9 @@ def api_info():
             'customers': '/admin/api/v1/customers/*',
             'blog': '/admin/api/v1/blog/*',
             'coupons': '/admin/api/v1/coupons/*',
-            'integrations': '/admin/api/v1/integrations/*'
+            'integrations': '/admin/api/v1/integrations/*',
+            'inventory': '/admin/api/v1/inventory/*',
+            'seo': '/admin/api/v1/seo/*'
         }
     })
 
@@ -469,49 +488,49 @@ def api_info():
 
 @app.errorhandler(404)
 def not_found(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Endpoint not found', 404)
 
 @app.errorhandler(500)
 def internal_error(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Internal server error', 500)
 
 @app.errorhandler(400)
 def bad_request(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Bad request', 400)
 
 @app.errorhandler(401)
 def unauthorized(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Unauthorized access', 401)
 
 @app.errorhandler(403)
 def forbidden(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Access forbidden', 403)
 
 @app.errorhandler(405)
 def method_not_allowed(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Method not allowed', 405)
 
 # ======================= JWT ERROR HANDLERS =======================
 
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Token has expired', 401)
 
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Invalid token', 401)
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):
-    from utils import error_response
+    from utils.response_formatter import error_response
     return error_response('Authorization token is required', 401)
 
 # ======================= REQUEST MIDDLEWARE =======================
@@ -579,6 +598,9 @@ if __name__ == '__main__':
     print("   • Blog Management")
     print("   • Blog Comments Management")
     print("   • Coupons & Discounts")
+    print("   • Product Reviews")
+    print("   • Inventory Management")
+    print("   • SEO Management")  # Added SEO
     print("   • API Integrations")
     print("=" * 70)
     print("🌐 Public API Endpoints:")
@@ -589,6 +611,21 @@ if __name__ == '__main__':
     print("   • Eligible coupons for customers")
     print("   • Active flash sales")
     print("   • Bulk discount calculations")
+    print("   • SEO robots.txt serving")
+    print("   • SEO sitemap.xml serving")
+    print("=" * 70)
+    print("🔍 SEO Management Features:")
+    print("   • Meta tags management (title, description, keywords)")
+    print("   • Open Graph & Twitter Card tags")
+    print("   • Structured data (Schema.org) support")
+    print("   • Robots.txt dynamic generation")
+    print("   • XML sitemap automation")
+    print("   • Keyword tracking & ranking")
+    print("   • Page-wise SEO auditing")
+    print("   • SEO recommendations engine")
+    print("   • Content analysis & optimization")
+    print("   • Canonical URL management")
+    print("   • SEO analytics dashboard")
     print("=" * 70)
     print("💰 Coupons & Discounts Features:")
     print("   • Percentage & fixed amount discounts")
@@ -620,10 +657,37 @@ if __name__ == '__main__':
     print("   • Comment moderation queue")
     print("   • Bulk comment operations")
     print("=" * 70)
+    print("📦 Inventory Management Features:")
+    print("   • Real-time stock tracking")
+    print("   • Movement history & audit trails")
+    print("   • Low stock alerts & automation")
+    print("   • Supplier management")
+    print("   • Purchase order lifecycle")
+    print("   • Stock adjustments & approvals")
+    print("   • Valuation & margin analysis")
+    print("   • ABC analysis & forecasting")
+    print("   • Multi-location support")
+    print("   • Bulk operations & CSV import/export")
+    print("=" * 70)
     print("🔗 Webhook Endpoints:")
     print("   • /webhooks/razorpay")
     print("   • /webhooks/phonepe")
     print("   • /webhooks/shiprocket")
+    print("=" * 70)
+    print("📊 SEO API Endpoints:")
+    print("   • GET  /admin/api/v1/seo/dashboard - SEO analytics")
+    print("   • GET  /admin/api/v1/seo/pages - SEO pages management")
+    print("   • POST /admin/api/v1/seo/pages - Create SEO page")
+    print("   • PUT  /admin/api/v1/seo/pages/{id} - Update SEO page")
+    print("   • GET  /admin/api/v1/seo/keywords - Keywords management")
+    print("   • POST /admin/api/v1/seo/keywords - Add keyword")
+    print("   • POST /admin/api/v1/seo/sitemap/generate - Generate sitemap")
+    print("   • GET  /admin/api/v1/seo/robots - Manage robots.txt")
+    print("   • POST /admin/api/v1/seo/audit/run - Run SEO audit")
+    print("   • GET  /admin/api/v1/seo/schema/templates - Schema templates")
+    print("   • POST /admin/api/v1/seo/schema/validate - Validate schema")
+    print("   • GET  /api/v1/robots.txt - Public robots.txt")
+    print("   • GET  /api/v1/sitemap.xml - Public sitemap.xml")
     print("=" * 70)
     
     # Run the application
