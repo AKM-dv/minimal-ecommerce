@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
 
+
 # Import configuration
 from config import Config
 
@@ -36,6 +37,8 @@ from admin.integrations import integrations_bp
 from admin.blog import blog_bp
 from admin.blog_comments import blog_comments_bp
 from admin.coupons import coupons_bp
+from admin.product_reviews import product_reviews_bp
+
 
 # Register all blueprints with URL prefix
 app.register_blueprint(auth_bp, url_prefix='/admin/api/v1')
@@ -50,6 +53,8 @@ app.register_blueprint(integrations_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(blog_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(blog_comments_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(coupons_bp, url_prefix='/admin/api/v1')
+app.register_blueprint(product_reviews_bp, url_prefix='/admin/api/v1')
+
 
 # Create a separate blueprint for public endpoints
 public_bp = Blueprint('public', __name__)

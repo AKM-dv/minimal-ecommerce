@@ -846,3 +846,471 @@ CREATE INDEX idx_coupon_usage_date ON coupon_usage(usage_date);
 CREATE INDEX idx_flash_sales_time ON flash_sales(start_time, end_time, is_active);
 CREATE INDEX idx_customer_groups_active ON customer_groups(is_active);
 CREATE INDEX idx_bulk_rules_active ON bulk_discount_rules(is_active);
+
+
+
+
+
+-- Additional tables for Product Reviews System
+-- Add to your existing database_scheme.sql
+
+-- Enhanced product_reviews table (replace existing if needed)
+DROP TABLE IF EXISTS product_reviews;
+CREATE TABLE product_reviews (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    product_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    order_id INT NULL, -- For verified purchase validation
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    title VARCHAR(255),
+    review_text TEXT NOT NULL,
+    review_images JSON, -- Array of image URLs/paths
+    review_videos JSON, -- Array of video URLs/paths
+    is_verified_purchase BOOLEAN DEFAULT FALSE,
+    is_approved BOOLEAN DEFAULT FALSE,
+    is_flagged BOOLEAN DEFAULT FALSE,
+    helpfulness_score DECIMAL(5,2) DEFAULT 0.00,
+    admin_response TEXT,
+    approved_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+    INDEX idx_product_id (product_id),
+    INDEX idx_customer_id (customer_id),
+    INDEX idx_rating (rating),
+    INDEX idx_approved (is_approved),
+    INDEX idx_created_at (created_at),
+    INDEX idx_verified_purchase (is_verified_purchase)
+);
+
+-- Review helpfulness voting table
+CREATE TABLE review_helpfulness (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    review_id INT NOT NULL,
+    customer_id INT NOT NULL,
+    is_helpful BOOLEAN NOT NULL, -- TRUE for helpful, FALSE for not helpful
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (review_id) REFERENCES product_reviews(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_customer_review_vote (review_id, customer_id),
+    INDEX idx_review_id (review_id),
+    INDEX idx_helpful (is_helpful)
+);
+
+-- Review reports table (for flagging inappropriate reviews)
+CREATE TABLE review_reports (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    review_id INT NOT NULL,
+    reported_by INT NOT NULL, -- Customer who reported
+    reason ENUM('spam', 'fake', 'inappropriate', 'offensive', 'irrelevant', 'other') NOT NULL,
+    description TEXT,
+    status ENUM('pending', 'resolved', 'dismissed') DEFAULT 'pending',
+    admin_action VARCHAR(100), -- Action taken by admin
+    admin_note TEXT,
+    resolved_by INT, -- Admin who resolved
+    reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL,
+    FOREIGN KEY (review_id) REFERENCES product_reviews(id) ON DELETE CASCADE,
+    FOREIGN KEY (reported_by) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (resolved_by) REFERENCES admins(id) ON DELETE SET NULL,
+    INDEX idx_review_id (review_id),
+    INDEX idx_status (status),
+    INDEX idx_reported_at (reported_at)
+);
+
+-- Admin review actions log table
+CREATE TABLE admin_review_actions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    review_id INT NOT NULL,
+    admin_id INT NOT NULL,
+    action ENUM('approved', 'rejected', 'flagged', 'responded', 'deleted') NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (review_id) REFERENCES product_reviews(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+    INDEX idx_review_id (review_id),
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_action (action),
+    INDEX idx_created_at (created_at)
+);
+
+-- Admin responses to reviews table
+CREATE TABLE admin_review_responses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    review_id INT NOT NULL,
+    admin_id INT NOT NULL,
+    response_text TEXT NOT NULL,
+    is_public BOOLEAN DEFAULT TRUE, -- Whether response is visible to customers
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (review_id) REFERENCES product_reviews(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+    INDEX idx_review_id (review_id),
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_created_at (created_at)
+);
+
+-- Review analytics table (daily aggregated data)
+CREATE TABLE review_analytics_daily (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    analytics_date DATE NOT NULL,
+    product_id INT,
+    total_reviews INT DEFAULT 0,
+    approved_reviews INT DEFAULT 0,
+    average_rating DECIMAL(3,2) DEFAULT 0.00,
+    verified_reviews INT DEFAULT 0,
+    reviews_with_media INT DEFAULT 0,
+    total_helpfulness_votes INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_date_product (analytics_date, product_id),
+    INDEX idx_date (analytics_date),
+    INDEX idx_product_id (product_id)
+);
+
+-- Review quality scores table (for fake detection)
+CREATE TABLE review_quality_scores (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    review_id INT NOT NULL,
+    quality_score INT DEFAULT 0, -- 0-100 score
+    fake_probability DECIMAL(5,4) DEFAULT 0.0000, -- 0.0000 to 1.0000
+    suspicious_indicators JSON, -- Array of detected indicators
+    sentiment_score DECIMAL(3,2) DEFAULT 0.00, -- -1.00 to 1.00
+    calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (review_id) REFERENCES product_reviews(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_review_score (review_id),
+    INDEX idx_quality_score (quality_score),
+    INDEX idx_fake_probability (fake_probability)
+);
+
+-- Add columns to products table for review aggregation
+ALTER TABLE products 
+ADD COLUMN average_rating DECIMAL(3,2) DEFAULT 0.00 AFTER price,
+ADD COLUMN review_count INT DEFAULT 0 AFTER average_rating,
+ADD COLUMN last_reviewed_at TIMESTAMP NULL AFTER review_count;
+
+-- Create indexes for better performance
+CREATE INDEX idx_products_rating ON products(average_rating);
+CREATE INDEX idx_products_review_count ON products(review_count);
+
+-- Insert some sample review quality indicators for testing
+INSERT INTO review_quality_scores (review_id, quality_score, fake_probability, suspicious_indicators, sentiment_score)
+SELECT 
+    id,
+    FLOOR(RAND() * 100) + 1, -- Random quality score 1-100
+    RAND() * 0.5, -- Random fake probability 0.0-0.5
+    JSON_ARRAY('sample_indicator'), -- Sample indicators
+    (RAND() * 2) - 1 -- Random sentiment -1.0 to 1.0
+FROM product_reviews 
+WHERE id IN (SELECT id FROM product_reviews LIMIT 10);
+
+-- Create stored procedure to update product ratings
+DELIMITER //
+CREATE PROCEDURE UpdateProductRating(IN product_id_param INT)
+BEGIN
+    DECLARE avg_rating DECIMAL(3,2);
+    DECLARE review_count_var INT;
+    DECLARE last_review TIMESTAMP;
+    
+    -- Calculate average rating from approved reviews
+    SELECT 
+        COALESCE(AVG(rating), 0),
+        COUNT(*),
+        MAX(created_at)
+    INTO avg_rating, review_count_var, last_review
+    FROM product_reviews 
+    WHERE product_id = product_id_param AND is_approved = 1;
+    
+    -- Update product table
+    UPDATE products 
+    SET 
+        average_rating = avg_rating,
+        review_count = review_count_var,
+        last_reviewed_at = last_review
+    WHERE id = product_id_param;
+END //
+DELIMITER ;
+
+-- Create trigger to automatically update helpfulness score
+DELIMITER //
+CREATE TRIGGER update_helpfulness_score 
+    AFTER INSERT ON review_helpfulness
+    FOR EACH ROW
+BEGIN
+    DECLARE helpful_count INT;
+    DECLARE total_count INT;
+    DECLARE helpfulness DECIMAL(5,2);
+    
+    -- Count helpful and total votes
+    SELECT 
+        SUM(CASE WHEN is_helpful = 1 THEN 1 ELSE 0 END),
+        COUNT(*)
+    INTO helpful_count, total_count
+    FROM review_helpfulness 
+    WHERE review_id = NEW.review_id;
+    
+    -- Calculate helpfulness score (percentage)
+    SET helpfulness = (helpful_count / total_count) * 100;
+    
+    -- Update review
+    UPDATE product_reviews 
+    SET helpfulness_score = helpfulness 
+    WHERE id = NEW.review_id;
+END //
+DELIMITER ;
+
+-- Sample data for testing (optional)
+-- Insert sample reviews if products and customers exist
+/*
+INSERT INTO product_reviews (product_id, customer_id, rating, title, review_text, is_verified_purchase, is_approved) 
+VALUES 
+(1, 1, 5, 'Excellent Product!', 'This product exceeded my expectations. Great quality and fast delivery.', TRUE, TRUE),
+(1, 2, 4, 'Good value for money', 'Nice product overall, though packaging could be better.', TRUE, TRUE),
+(2, 1, 3, 'Average quality', 'The product is okay but nothing special. Expected better for the price.', TRUE, FALSE),
+(2, 3, 5, 'Love it!', 'Amazing quality! Will definitely buy again. Highly recommended.', FALSE, FALSE),
+(1, 3, 1, 'Poor quality', 'Product broke after one day. Very disappointed with the quality.', TRUE, TRUE);
+
+-- Insert sample helpfulness votes
+INSERT INTO review_helpfulness (review_id, customer_id, is_helpful) 
+VALUES 
+(1, 2, TRUE),
+(1, 3, TRUE),
+(2, 1, TRUE),
+(2, 3, FALSE),
+(5, 1, TRUE),
+(5, 2, TRUE);
+
+-- Insert sample review reports
+INSERT INTO review_reports (review_id, reported_by, reason, description) 
+VALUES 
+(4, 1, 'fake', 'This review seems fake - generic language and unverified purchase'),
+(4, 2, 'spam', 'Looks like a spam review with promotional content');
+*/
+
+-- Create views for common queries
+CREATE VIEW approved_reviews_summary AS
+SELECT 
+    pr.product_id,
+    p.name as product_name,
+    COUNT(*) as total_approved_reviews,
+    AVG(pr.rating) as average_rating,
+    SUM(CASE WHEN pr.rating = 5 THEN 1 ELSE 0 END) as five_star_count,
+    SUM(CASE WHEN pr.rating = 4 THEN 1 ELSE 0 END) as four_star_count,
+    SUM(CASE WHEN pr.rating = 3 THEN 1 ELSE 0 END) as three_star_count,
+    SUM(CASE WHEN pr.rating = 2 THEN 1 ELSE 0 END) as two_star_count,
+    SUM(CASE WHEN pr.rating = 1 THEN 1 ELSE 0 END) as one_star_count,
+    SUM(CASE WHEN pr.is_verified_purchase = 1 THEN 1 ELSE 0 END) as verified_review_count,
+    MAX(pr.created_at) as last_review_date
+FROM product_reviews pr
+LEFT JOIN products p ON pr.product_id = p.id
+WHERE pr.is_approved = 1
+GROUP BY pr.product_id, p.name;
+
+CREATE VIEW review_moderation_queue AS
+SELECT 
+    pr.id,
+    pr.product_id,
+    p.name as product_name,
+    pr.customer_id,
+    c.name as customer_name,
+    pr.rating,
+    pr.title,
+    pr.review_text,
+    pr.is_verified_purchase,
+    pr.created_at,
+    CASE 
+        WHEN pr.is_flagged = 1 OR EXISTS(SELECT 1 FROM review_reports WHERE review_id = pr.id AND status = 'pending') THEN 'high'
+        WHEN pr.rating <= 2 OR pr.review_images IS NOT NULL OR pr.review_videos IS NOT NULL THEN 'medium'
+        ELSE 'low'
+    END as priority,
+    (SELECT COUNT(*) FROM review_reports WHERE review_id = pr.id AND status = 'pending') as pending_reports
+FROM product_reviews pr
+LEFT JOIN products p ON pr.product_id = p.id
+LEFT JOIN customers c ON pr.customer_id = c.id
+WHERE pr.is_approved = 0 AND pr.admin_response IS NULL
+ORDER BY 
+    CASE 
+        WHEN pr.is_flagged = 1 THEN 1
+        WHEN EXISTS(SELECT 1 FROM review_reports WHERE review_id = pr.id AND status = 'pending') THEN 2
+        WHEN pr.rating <= 2 THEN 3
+        ELSE 4
+    END,
+    pr.created_at ASC;
+
+CREATE VIEW review_analytics_summary AS
+SELECT 
+    DATE(pr.created_at) as review_date,
+    COUNT(*) as total_reviews,
+    SUM(CASE WHEN pr.is_approved = 1 THEN 1 ELSE 0 END) as approved_reviews,
+    SUM(CASE WHEN pr.is_verified_purchase = 1 THEN 1 ELSE 0 END) as verified_reviews,
+    SUM(CASE WHEN pr.review_images IS NOT NULL OR pr.review_videos IS NOT NULL THEN 1 ELSE 0 END) as reviews_with_media,
+    AVG(pr.rating) as average_rating,
+    SUM(CASE WHEN pr.rating = 5 THEN 1 ELSE 0 END) as five_star_reviews,
+    SUM(CASE WHEN pr.rating = 1 THEN 1 ELSE 0 END) as one_star_reviews,
+    COUNT(DISTINCT pr.customer_id) as unique_reviewers,
+    COUNT(DISTINCT pr.product_id) as products_reviewed
+FROM product_reviews pr
+WHERE pr.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+GROUP BY DATE(pr.created_at)
+ORDER BY review_date DESC;
+
+-- Create indexes for the views
+CREATE INDEX idx_review_moderation_priority ON product_reviews(is_approved, admin_response, is_flagged, rating);
+CREATE INDEX idx_review_date_approved ON product_reviews(created_at, is_approved);
+CREATE INDEX idx_review_media ON product_reviews(review_images, review_videos);
+
+-- Performance optimization indexes
+CREATE INDEX idx_reviews_product_approved_rating ON product_reviews(product_id, is_approved, rating);
+CREATE INDEX idx_reviews_customer_verified ON product_reviews(customer_id, is_verified_purchase);
+CREATE INDEX idx_helpfulness_review_helpful ON review_helpfulness(review_id, is_helpful);
+CREATE INDEX idx_reports_status_date ON review_reports(status, reported_at);
+CREATE INDEX idx_admin_actions_date ON admin_review_actions(created_at, action);
+
+-- Add foreign key constraints for better data integrity
+ALTER TABLE review_helpfulness 
+ADD CONSTRAINT fk_helpfulness_review 
+FOREIGN KEY (review_id) REFERENCES product_reviews(id) ON DELETE CASCADE;
+
+ALTER TABLE review_helpfulness 
+ADD CONSTRAINT fk_helpfulness_customer 
+FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE;
+
+-- Create function to calculate review sentiment score
+DELIMITER //
+CREATE FUNCTION CalculateReviewSentiment(review_text TEXT) 
+RETURNS DECIMAL(3,2)
+READS SQL DATA
+DETERMINISTIC
+BEGIN
+    DECLARE sentiment_score DECIMAL(3,2) DEFAULT 0.00;
+    DECLARE positive_count INT DEFAULT 0;
+    DECLARE negative_count INT DEFAULT 0;
+    DECLARE total_words INT;
+    
+    -- Simple sentiment analysis based on keyword counting
+    SET review_text = LOWER(review_text);
+    
+    -- Count positive words
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'good', ''))) / 4;
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'great', ''))) / 5;
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'excellent', ''))) / 9;
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'amazing', ''))) / 7;
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'perfect', ''))) / 7;
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'love', ''))) / 4;
+    SET positive_count = positive_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'awesome', ''))) / 7;
+    
+    -- Count negative words
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'bad', ''))) / 3;
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'terrible', ''))) / 8;
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'awful', ''))) / 5;
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'hate', ''))) / 4;
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'horrible', ''))) / 8;
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'worst', ''))) / 5;
+    SET negative_count = negative_count + (LENGTH(review_text) - LENGTH(REPLACE(review_text, 'disappointing', ''))) / 13;
+    
+    -- Calculate sentiment score
+    SET total_words = positive_count + negative_count;
+    
+    IF total_words > 0 THEN
+        SET sentiment_score = (positive_count - negative_count) / total_words;
+        
+        -- Ensure score is between -1.00 and 1.00
+        IF sentiment_score > 1.00 THEN SET sentiment_score = 1.00; END IF;
+        IF sentiment_score < -1.00 THEN SET sentiment_score = -1.00; END IF;
+    END IF;
+    
+    RETURN sentiment_score;
+END //
+DELIMITER ;
+
+-- Create procedure for batch processing of review quality scores
+DELIMITER //
+CREATE PROCEDURE UpdateReviewQualityScores()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE review_id_var INT;
+    DECLARE review_text_var TEXT;
+    DECLARE quality_score_var INT;
+    DECLARE sentiment_score_var DECIMAL(3,2);
+    
+    DECLARE review_cursor CURSOR FOR 
+        SELECT id, review_text 
+        FROM product_reviews 
+        WHERE id NOT IN (SELECT review_id FROM review_quality_scores);
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    OPEN review_cursor;
+    
+    review_loop: LOOP
+        FETCH review_cursor INTO review_id_var, review_text_var;
+        IF done THEN
+            LEAVE review_loop;
+        END IF;
+        
+        -- Calculate quality score (simplified)
+        SET quality_score_var = CASE 
+            WHEN LENGTH(review_text_var) >= 100 THEN 80
+            WHEN LENGTH(review_text_var) >= 50 THEN 60
+            WHEN LENGTH(review_text_var) >= 20 THEN 40
+            ELSE 20
+        END;
+        
+        -- Calculate sentiment score
+        SET sentiment_score_var = CalculateReviewSentiment(review_text_var);
+        
+        -- Insert quality score record
+        INSERT INTO review_quality_scores (review_id, quality_score, sentiment_score)
+        VALUES (review_id_var, quality_score_var, sentiment_score_var)
+        ON DUPLICATE KEY UPDATE 
+            quality_score = quality_score_var,
+            sentiment_score = sentiment_score_var,
+            updated_at = NOW();
+        
+    END LOOP;
+    
+    CLOSE review_cursor;
+END //
+DELIMITER ;
+
+-- Create event scheduler for daily analytics aggregation
+CREATE EVENT IF NOT EXISTS daily_review_analytics
+ON SCHEDULE EVERY 1 DAY
+STARTS '2025-01-01 01:00:00'
+DO
+BEGIN
+    -- Aggregate daily review analytics
+    INSERT INTO review_analytics_daily (
+        analytics_date, 
+        product_id, 
+        total_reviews, 
+        approved_reviews, 
+        average_rating, 
+        verified_reviews, 
+        reviews_with_media, 
+        total_helpfulness_votes
+    )
+    SELECT 
+        CURDATE() - INTERVAL 1 DAY,
+        pr.product_id,
+        COUNT(*),
+        SUM(CASE WHEN pr.is_approved = 1 THEN 1 ELSE 0 END),
+        AVG(CASE WHEN pr.is_approved = 1 THEN pr.rating ELSE NULL END),
+        SUM(CASE WHEN pr.is_verified_purchase = 1 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN pr.review_images IS NOT NULL OR pr.review_videos IS NOT NULL THEN 1 ELSE 0 END),
+        COALESCE((SELECT COUNT(*) FROM review_helpfulness rh WHERE rh.review_id IN 
+            (SELECT id FROM product_reviews WHERE product_id = pr.product_id AND DATE(created_at) = CURDATE() - INTERVAL 1 DAY)), 0)
+    FROM product_reviews pr
+    WHERE DATE(pr.created_at) = CURDATE() - INTERVAL 1 DAY
+    GROUP BY pr.product_id
+    ON DUPLICATE KEY UPDATE
+        total_reviews = VALUES(total_reviews),
+        approved_reviews = VALUES(approved_reviews),
+        average_rating = VALUES(average_rating),
+        verified_reviews = VALUES(verified_reviews),
+        reviews_with_media = VALUES(reviews_with_media),
+        total_helpfulness_votes = VALUES(total_helpfulness_votes);
+END;
