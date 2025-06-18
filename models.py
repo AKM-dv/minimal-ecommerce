@@ -13,7 +13,8 @@ class Product:
             json.dumps(data.get('images', [])), data.get('status', 'active'),
             data.get('weight'), data.get('dimensions'), data.get('is_featured', False),
             json.dumps(data.get('tags', [])), data.get('meta_title', ''),
-            data.get('meta_description', ''), data.import mysql.connector
+            data.get('meta_description', ''))
+import mysql.connector
 from datetime import datetime, timedelta
 import json
 import bcrypt

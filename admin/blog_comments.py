@@ -530,4 +530,4 @@ def check_comment_needs_attention(comment):
         
         return any(suspicious_patterns)
     except:
-        return False
+        return False    

@@ -3,7 +3,24 @@ class Product:
     def create_product(data):
         query = """
         INSERT INTO products (name, description, price, sale_price, sku, stock_quantity, 
-                            category_iimport mysql.connector
+                              category_id, images, status, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        params = (
+            data['name'],
+            data['description'],
+            data['price'],
+            data.get('sale_price'),
+            data['sku'],
+            data['stock_quantity'],
+            data['category_id'],
+            json.dumps(data.get('images', [])),
+            data.get('status', 'active'),
+            datetime.now()
+        )
+        return Database.execute_query(query, params)
+    
+
 from datetime import datetime, timedelta
 import json
 import bcrypt
