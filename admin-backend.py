@@ -38,6 +38,7 @@ from admin.blog import blog_bp
 from admin.blog_comments import blog_comments_bp
 from admin.coupons import coupons_bp
 from admin.product_reviews import product_reviews_bp
+from admin.inventory import inventory_bp
 
 
 # Register all blueprints with URL prefix
@@ -54,6 +55,8 @@ app.register_blueprint(blog_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(blog_comments_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(coupons_bp, url_prefix='/admin/api/v1')
 app.register_blueprint(product_reviews_bp, url_prefix='/admin/api/v1')
+app.register_blueprint(inventory_bp, url_prefix='/admin/api/v1')
+
 
 
 # Create a separate blueprint for public endpoints
@@ -199,6 +202,85 @@ def get_active_flash_sales():
         
     except Exception as e:
         return error_response('Error fetching active flash sales', 500)
+
+
+@app.route('/admin/api/v1/info', methods=['GET'])
+def api_info():
+    from utils import success_response
+    return success_response({
+        'name': 'E-commerce Admin API',
+        'version': '1.0.0',
+        'description': 'Comprehensive e-commerce administration backend',
+        'modules': [
+            'Authentication & Authorization',
+            'Dashboard Analytics',
+            'Site Configuration',
+            'Store Management',
+            'Product Management',
+            'Category Management', 
+            'Order Management',
+            'Customer Management',
+            'Blog Management',
+            'Coupons & Discounts',
+            'Product Reviews',
+            'Inventory Management',  # New module
+            'API Integrations'
+        ],
+        'features': {
+            'inventory_management': {
+                'real_time_tracking': 'Live stock level monitoring across all products',
+                'movement_history': 'Complete audit trail of all stock movements',
+                'low_stock_alerts': 'Automated alerts for products below threshold',
+                'bulk_operations': 'Mass inventory updates and adjustments',
+                'import_export': 'CSV import/export for inventory data',
+                'supplier_management': 'Complete supplier database and relationships',
+                'purchase_orders': 'Full PO lifecycle from creation to receiving',
+                'stock_adjustments': 'Manual adjustments with approval workflow',
+                'valuation_reports': 'Inventory valuation and margin analysis',
+                'dead_stock_analysis': 'Identification of slow-moving inventory',
+                'abc_analysis': 'Automated ABC classification for inventory optimization',
+                'forecasting': 'Demand forecasting based on sales history',
+                'cycle_counting': 'Systematic inventory counting and variance tracking',
+                'multi_location': 'Support for multiple warehouses and locations',
+                'transfer_management': 'Inter-location stock transfers',
+                'cost_tracking': 'FIFO/LIFO/Average cost methods',
+                'reorder_automation': 'Intelligent reorder point calculations'
+            },
+            # ... other existing features
+        },
+        'inventory_endpoints': {
+            'stock_management': [
+                '/admin/api/v1/inventory/stock-levels',
+                '/admin/api/v1/inventory/movements',
+                '/admin/api/v1/inventory/adjust'
+            ],
+            'supplier_management': [
+                '/admin/api/v1/inventory/suppliers',
+                '/admin/api/v1/inventory/suppliers/{id}'
+            ],
+            'purchase_orders': [
+                '/admin/api/v1/inventory/purchase-orders',
+                '/admin/api/v1/inventory/purchase-orders/{id}/receive'
+            ],
+            'analytics_reports': [
+                '/admin/api/v1/inventory/analytics/overview',
+                '/admin/api/v1/inventory/reports/valuation',
+                '/admin/api/v1/inventory/reports/dead-stock'
+            ],
+            'bulk_operations': [
+                '/admin/api/v1/inventory/bulk-update',
+                '/admin/api/v1/inventory/import',
+                '/admin/api/v1/inventory/export'
+            ],
+            'forecasting': [
+                '/admin/api/v1/inventory/forecasting'
+            ],
+            'alerts': [
+                '/admin/api/v1/inventory/alerts/low-stock'
+            ]
+        }
+        # ... rest of existing features
+    })
 
 @public_bp.route('/bulk-discounts/calculate', methods=['POST'])
 def calculate_bulk_discounts():
